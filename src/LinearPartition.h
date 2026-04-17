@@ -24,7 +24,7 @@
 
 using namespace std;
 
-#ifdef lpv
+#ifdef FAST_FLOAT
   typedef float pf_type;
 #else
   typedef double pf_type;
