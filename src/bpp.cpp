@@ -387,11 +387,12 @@ void BeamCKYParser::outside(vector<int> next_pair[]){
                                 {
                                     newscore += -(pseudo_energy_stack[p] + pseudo_energy_stack[i] + pseudo_energy_stack[j] + pseudo_energy_stack[q]);
                                 }
-
+                                if (use_bonus) newscore += -bonus_matrix[p][q];
 
                                 Fast_LogPlusEquals(state.beta, bestP[q][p].beta + newscore/kT);
 #else
                                 newscore = score_helix(nucp, nucp1, nucq_1, nucq);
+                                if (use_bonus) newscore += -bonus_matrix[p][q]/kT;
                                 Fast_LogPlusEquals(state.beta, bestP[q][p].beta + newscore);
 #endif
                             } else {
@@ -399,11 +400,13 @@ void BeamCKYParser::outside(vector<int> next_pair[]){
 #ifdef lpv
                                 newscore = - v_score_single(p,q,i,j, nucp, nucp1, nucq_1, nucq,
                                                    nuci_1, nuci, nucj, nucj1);
+                                if (use_bonus) newscore += -bonus_matrix[p][q];
                                 Fast_LogPlusEquals(state.beta, bestP[q][p].beta + newscore/kT);
 #else
                                 newscore = score_junction_B(p, q, nucp, nucp1, nucq_1, nucq) +
-                                        precomputed + 
+                                        precomputed +
                                         score_single_without_junctionB(p, q, i, j, nuci_1, nuci, nucj, nucj1);
+                                if (use_bonus) newscore += -bonus_matrix[p][q]/kT;
                                 Fast_LogPlusEquals(state.beta, bestP[q][p].beta + newscore);
 #endif
                             }
@@ -501,9 +504,11 @@ void BeamCKYParser::outside(vector<int> next_pair[]){
                 {
 #ifdef lpv
                     newscore = - v_score_multi(i, j, nuci, nuci1, nucs[j-1], nucj, seq_length, dangle_mode);
+                    if (use_bonus) newscore += -bonus_matrix[i][j];
                     Fast_LogPlusEquals(state.beta, beamstepP[i].beta + newscore/kT);
 #else
                     newscore = score_multi(i, j, nuci, nuci1, nucs[j-1], nucj, seq_length);
+                    if (use_bonus) newscore += -bonus_matrix[i][j]/kT;
                     Fast_LogPlusEquals(state.beta, beamstepP[i].beta + newscore);
 #endif
                 }
