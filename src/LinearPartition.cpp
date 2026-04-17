@@ -10,6 +10,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <sys/time.h>
 #include <stack>
 #include <tuple>
@@ -212,7 +213,10 @@ double BeamCKYParser::parse(string& seq) {
                     }
 
                     // 2. generate p(i, j)
-                    Fast_LogPlusEquals(beamstepP[i].alpha, state.alpha);
+                    if (use_bonus)
+                        Fast_LogPlusEquals(beamstepP[i].alpha, state.alpha + (-bonus_matrix[i][j])/kT);
+                    else
+                        Fast_LogPlusEquals(beamstepP[i].alpha, state.alpha);
                 }
             }
         }
@@ -246,9 +250,11 @@ double BeamCKYParser::parse(string& seq) {
                 {
 #ifdef lpv
 		  newscore = - v_score_multi(i, j, nuci, nuci1, nucs[j-1], nucj, seq_length, dangle_mode);
+                    if (use_bonus) newscore += -bonus_matrix[i][j];
                     Fast_LogPlusEquals(beamstepP[i].alpha, state.alpha + newscore/kT);
 #else
                     newscore = score_multi(i, j, nuci, nuci1, nucs[j-1], nucj, seq_length);
+                    if (use_bonus) newscore += -bonus_matrix[i][j]/kT;
                     Fast_LogPlusEquals(beamstepP[i].alpha, state.alpha + newscore);
 #endif
                 }
@@ -293,9 +299,11 @@ double BeamCKYParser::parse(string& seq) {
                                 // SHAPE for Vienna only
                                 if (use_shape)
                                     newscore += -(pseudo_energy_stack[p] + pseudo_energy_stack[i] + pseudo_energy_stack[j] + pseudo_energy_stack[q]);
+                                if (use_bonus) newscore += -bonus_matrix[p][q];
                                 Fast_LogPlusEquals(bestP[q][p].alpha, state.alpha + newscore/kT);
 #else
                                 newscore = score_helix(nucp, nucp1, nucq_1, nucq);
+                                if (use_bonus) newscore += -bonus_matrix[p][q]/kT;
                                 Fast_LogPlusEquals(bestP[q][p].alpha, state.alpha + newscore);
 #endif
                             } else {
@@ -303,12 +311,14 @@ double BeamCKYParser::parse(string& seq) {
 #ifdef lpv
                                 newscore = - v_score_single(p,q,i,j, nucp, nucp1, nucq_1, nucq,
                                                    nuci_1, nuci, nucj, nucj1);
+                                if (use_bonus) newscore += -bonus_matrix[p][q];
                                 Fast_LogPlusEquals(bestP[q][p].alpha, state.alpha + newscore/kT);
 #else
                                 newscore = score_junction_B(p, q, nucp, nucp1, nucq_1, nucq) +
                                         precomputed +
                                         score_single_without_junctionB(p, q, i, j,
                                                                        nuci_1, nuci, nucj, nucj1);
+                                if (use_bonus) newscore += -bonus_matrix[p][q]/kT;
                                 Fast_LogPlusEquals(bestP[q][p].alpha, state.alpha + newscore);
 #endif
                             }
@@ -519,6 +529,7 @@ BeamCKYParser::BeamCKYParser(int beam_size,
                              float ThreshKnot_threshold,
                              string ThreshKnot_file_index,
                              string shape_file_path,
+                             string bonus_file_path,
                              bool fasta,
 			                 int dangles)
     : beam(beam_size), 
@@ -578,6 +589,56 @@ BeamCKYParser::BeamCKYParser(int beam_size,
             assert(pseudo_energy_stack.size() == i + 1 );
         }
     }
+
+    if (bonus_file_path != "") {
+        use_bonus = true;
+
+        ifstream bonus_in(bonus_file_path);
+        if (!bonus_in.good()) {
+            cout << "Reading bonus matrix file error!" << endl;
+            assert(false);
+        }
+
+        string line;
+        int row = 0;
+
+        while (getline(bonus_in, line)) {
+            if (line.empty() || line[0] == '#') continue;
+
+            istringstream iss(line);
+            vector<int> row_values;
+            double value;
+
+            while (iss >> value) {
+                int scaled_value = (int)roundf(value * 100.0 * bonus_scale);
+                row_values.push_back(scaled_value);
+            }
+
+            if (row == 0) {
+                int n = row_values.size();
+                bonus_matrix.resize(n, vector<int>(n, 0));
+            }
+
+            if (row_values.size() != bonus_matrix.size()) {
+                cout << "Error: Bonus matrix is not square" << endl;
+                assert(false);
+            }
+
+            bonus_matrix[row] = row_values;
+            row++;
+        }
+
+        if (row != (int)bonus_matrix.size()) {
+            cout << "Error: Incomplete bonus matrix" << endl;
+            assert(false);
+        }
+
+        if (is_verbose) {
+            cout << "Loaded " << row << "x" << row
+                 << " bonus matrix with scaling factor "
+                 << bonus_scale << endl;
+        }
+    }
 }
 
 // trim from end (in place)
@@ -614,6 +675,8 @@ int main(int argc, char** argv){
 
     // SHAPE
     string shape_file_path = "";
+    // bonus
+    string bonus_file_path = "";
 
     if (argc > 1) {
         beamsize = atoi(argv[1]);
@@ -632,9 +695,10 @@ int main(int argc, char** argv){
         MEA_prefix = argv[14];
         MEA_bpseq = atoi(argv[15]) == 1;
         shape_file_path = argv[16];
-        fasta = atoi(argv[17]) == 1;
-	    dangles = atoi(argv[18]);
-        ystruct = argv[19]; // for p(y|x)
+        bonus_file_path = argv[17];
+        fasta = atoi(argv[18]) == 1;
+	    dangles = atoi(argv[19]);
+        ystruct = argv[20]; // for p(y|x)
     }
 
     if (is_verbose) printf("beam size: %d\n", beamsize);
@@ -712,7 +776,7 @@ int main(int argc, char** argv){
         replace(rna_seq.begin(), rna_seq.end(), 'T', 'U');
 
         // lhuang: moved inside loop, fixing an obscure but crucial bug in initialization
-        BeamCKYParser parser(beamsize, !sharpturn, is_verbose, bpp_file, bpp_file_index, pf_only, bpp_cutoff, forest_file, mea, MEA_gamma, MEA_file_index, MEA_bpseq, ThreshKnot, ThreshKnot_threshold, ThreshKnot_file_index, shape_file_path, fasta, dangles);
+        BeamCKYParser parser(beamsize, !sharpturn, is_verbose, bpp_file, bpp_file_index, pf_only, bpp_cutoff, forest_file, mea, MEA_gamma, MEA_file_index, MEA_bpseq, ThreshKnot, ThreshKnot_threshold, ThreshKnot_file_index, shape_file_path, bonus_file_path, fasta, dangles);
 
         double ensemble = parser.parse(rna_seq); // ensemble free energy
 

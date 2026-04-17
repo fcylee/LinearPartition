@@ -27,6 +27,7 @@ def setgflags():
     flags.DEFINE_float('threshold', 0.3, "set ThreshKnot threshold")
     flags.DEFINE_string('threshknot_prefix', '', "output ThreshKnot structure(s) to file(s) in bpseq format with user specified prefix name") # prefix of file name
     flags.DEFINE_string('shape', '', "import SHAPE data for SHAPE guided LinearPartition (DEFAULT: not use SHAPE data)") # SHAPE
+    flags.DEFINE_string('bonus', '', "import bonus matrix file for bonus-guided LinearPartition (DEFAULT: not use bonus)") # bonus matrix
     flags.DEFINE_boolean('fasta', False, "input is in fasta format") # FASTA format
     flags.DEFINE_integer('dangles', 2, "the way to treat `dangling end' energies for bases adjacent to helices in free ends and multi-loops (only supporting `0' or `2', default=`2')", short_name="d")
     flags.DEFINE_string('evaly', "", "batch eval all sequences against structure for p(y|x)", short_name='y') # p(y|x)
@@ -50,7 +51,8 @@ def main():
     TK = '1' if FLAGS.threshknot else '0'
     threshold = str(FLAGS.threshold)
     ThreshKnot_prefix = str(FLAGS.threshknot_prefix) + "_" if FLAGS.threshknot_prefix else ''
-    shape_file_path = str(FLAGS.shape) 
+    shape_file_path = str(FLAGS.shape)
+    bonus_file_path = str(FLAGS.bonus)
     is_fasta = '1' if FLAGS.fasta else '0'
     dangles = str(FLAGS.dangles)    
     evaly = FLAGS.evaly
@@ -88,7 +90,7 @@ def main():
     #     use_vienna = True # eval p(y|x) only in Vienna mode
 
     path = os.path.dirname(os.path.abspath(__file__))
-    cmd = ["%s/%s" % (path, 'bin/linearpartition_' + parameters), beamsize, is_sharpturn, is_verbose, bpp_file, bpp_prefix, pf_only, bpp_cutoff, forest_file, mea, gamma, TK, threshold, ThreshKnot_prefix, MEA_prefix, MEA_bpseq, shape_file_path, is_fasta, dangles, evaly]
+    cmd = ["%s/%s" % (path, 'bin/linearpartition_' + parameters), beamsize, is_sharpturn, is_verbose, bpp_file, bpp_prefix, pf_only, bpp_cutoff, forest_file, mea, gamma, TK, threshold, ThreshKnot_prefix, MEA_prefix, MEA_bpseq, shape_file_path, bonus_file_path, is_fasta, dangles, evaly]
     subprocess.call(cmd, stdin=sys.stdin)
     
 if __name__ == '__main__':

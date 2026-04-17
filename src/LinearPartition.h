@@ -98,6 +98,11 @@ public:
     double m = 1.8;
     double b = -0.6;
 
+    // bonus matrix
+    bool use_bonus = false;
+    double bonus_scale = 1.0;
+    vector<vector<int>> bonus_matrix;
+
 
     BeamCKYParser(int beam_size=100,
                   bool nosharpturn=true,
@@ -115,6 +120,7 @@ public:
                   float threshknot_threshold=0.3,
                   string threshknot_file_index="",
                   string shape_file_path="",
+                  string bonus_file_path="",
                   bool is_fasta=false,
 		          int dangles=1);
 
